@@ -1,0 +1,15 @@
+arf.h		your program's only interference point with libarf
+libarf.c	run-time linkable detailed backtrace generator and variable dumper library
+libero.c	memory profiler library based on libarf
+
+arf		run your program with libarf
+ero		run your program with libero
+mtero		run your multithreaded program with libero
+spidero.pl	postprocessor, visualizer and analyser of libero's output
+
+test.h		libarf's test
+test_prg.c	libarf's test
+test_obj.c	libarf's test
+test_dso.c	libarf's test
+test_lib.c	libarf's test
+testero.c	libero test program

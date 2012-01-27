@@ -1,0 +1,217 @@
+#!/bin/sh
+#
+# arf|ero|mtero -- multicall script to help starting programs
+#		   with preloaded debug libraries
+#
+# Synopsis:
+#	./arf [-maxpath=<n>] [-maxary=<n>] [-maxstr=<n>] <program> [<args>]...
+#
+#		Preload <program> with libarf.so and start it with <args>.
+#
+#		Options:
+#		-mangled: ($ARF_MANGLED)
+#			If specified, C++ names will be printed in mangled
+#			form you can decode by c++filt.  Otherwise just the
+#			class::method() will be printed, which is generally
+#			easier to read.
+#		-maxpath=<p>: ($ARF_MAXPATH)
+#			Controls how many path components to show of the file
+#			(source and DSO) names.  The default is to only keep
+#			the basename (p=1).
+#		-printvars: ($ARF_PRINTVARS)
+#			Print the current value of lexically visible variables
+#			in each frame.  Only effective if this feature was
+#			enabled in libarf in compile time.
+#		-maxary=<n>: ($ARF_MAXARRAY)
+#			Don't print more than <n> elements of array variables.
+#		-maxstr=<m>: ($ARF_MAXSTRING)
+#			Don't print more than <m> characters of strings.
+#
+#		The last two options are only meaningful if -printvars
+#		is enabled in run time.  <n> and <m> also has a role when
+#		the nature of a char *variable is ambiguous (printable or
+#		binary string).  If, before a NUL character is encoutered
+#		a non-printable character is found in <n> bytes the value
+#		will be printed as a byte array.  Otherwise it will be
+#		printed as a string, possibly trimmed to <m> characters.
+#
+#	./ero	[-maxpath=<n>]
+#		[-start] [-signal=<name>] [-tick=<seconds>]
+#		{[-karmas=<n>] [-depth=<n>] | [-terse]}
+#		<program> [<args>]
+#
+#		Preload <program> with libero.so and start it with <args>.
+#		Unless already set, $G_SLICE is set to "always-malloc" to
+#		reduce the number of false positives.  The report file is
+#		created in the <program>s current working directory.
+#
+#		Options:
+#		-maxpath=<n>: see ./arf -maxpath=<n>.
+#		-start: ($LIBERO_START)
+#			Start profiling right from program startup.
+#		-signal=<name>: ($LIBERO_SIGNAL)
+#			Specifies an alternative signal besides SIGPROF for
+#			controlling libero.  Recognized <name>s are INT, TERM,
+#			HUP, and USR[12] (either upper or lowercase names are
+#			accepted), or you can specify any signal number.
+#			-signal=int is convenient for long, boring profiling.
+#		-tick=<seconds>: ($LIBERO_TICK)
+#			Start accounting in <seconds> (unless <program> is
+#			-start:ed with accounting) and then keep reporting
+#			every <seconds>.
+#		-karmas=<n>: ($LIBERO_KARMA_DEPTH)
+#			Don't report a backtrace unless at least <n> memory
+#			chunks with differing karmas was allocated in that
+#			place (dynamic scope).  A memory chunk's karma tells
+#			for how many rounds has it been around.  This option
+#			may help you to filter out more likely memory leaking
+#			sites.
+#		-depth=<n>: ($LIBERO_DEPTH)
+#			How many frames to include in the backtraces.
+#			Reduction of the number of frames makes the
+#			accounting and reporting more performant but
+#			will give less information.  n=0 is valid and
+#			completely does away with backtrace generation.
+#		-terse: ($LIBERO_TERSE)
+#			Only report allocation summaries and skip all
+#			individual allocations, making the report shorter.
+#
+#	./mtero [options] <program> [<args>]
+#		Same as ./ero but preload a multithreaded <program>
+#		with libero_mt.so.  libhildon-based programs need
+#		thread awareness because of pulseaudio playback.
+#
+
+# Whom to preload?
+case "$0" in
+arf|*/arf)
+	me="arf";
+	;;
+ero|*/ero)
+	me="ero";
+	;;
+mtero|*/mtero)
+	me="ero_mt";
+	;;
+esac
+
+# Parse $me-specific command line parameters.
+case "$me" in
+arf)
+	while [ $# -gt 0 ];
+	do
+		case "$1" in
+		-mangled)
+			export ARF_MANGLED=1;
+			;;
+		-printvars)
+			export ARF_PRINTVARS=1;
+			;;
+		-maxpath=*)
+			export ARF_MAXPATH=${1#-maxpath=};
+			;;
+		-maxary=*)
+			export ARF_MAXARRAY=${1#-maxary=};
+			;;
+		-maxstr=*)
+			export ARF_MAXSTRING=${1#-maxstr=};
+			;;
+		*)
+			break;
+			;;
+		esac
+		shift;
+	done
+	;;
+ero|ero_mt)
+	# You almost certainly want this.  If not, override it.
+	[ "$G_SLICE" != "" ] \
+		|| export G_SLICE="always-malloc";
+
+	while [ $# -gt 0 ];
+	do
+		case "$1" in
+		-maxpath=*)
+			export ARF_MAXPATH=${1#-maxpath=};
+			;;
+		-start)
+			export LIBERO_START=1;
+			;;
+		-signal=*)
+			case "${1#-signal=}" in
+			INT|int)
+				export LIBERO_SIGNAL=2;
+				;;
+			TERM|term)
+				export LIBERO_SIGNAL=15;
+				;;
+			HUP|hup)
+				export LIBERO_SIGNAL=1;
+				;;
+			USR1|usr1)
+				export LIBERO_SIGNAL=10;
+				;;
+			USR2|usr2)
+				export LIBERO_SIGNAL=12;
+				;;
+			*)	# Assume numeric.
+				export LIBERO_SIGNAL=${1#-signal=};
+				;;
+			esac
+			;;
+		-tick=*)
+			export LIBERO_TICK=${1#-tick=};
+			;;
+		-karmas=*)
+			export LIBERO_KARMA_DEPTH=${1#-karmas=};
+			;;
+		-depth=*)
+			export LIBERO_DEPTH=${1#-depth=};
+			;;
+		-terse)
+			export LIBERO_TERSE=1;
+			;;
+		*)
+			break;
+			;;
+		esac
+		shift;
+	done
+	;;
+esac
+
+# Locate $me and execute the <program>.
+for path in . $HOME/lib/arf $HOME/lib /root /tmp /usr/local/lib /usr/lib;
+do
+	lib="$path/lib$me.so";
+	[ -f "$lib" ] || continue;
+
+	# Add $lib to $LD_PRELOAD.
+	if [ "$LD_PRELOAD" = "" ];
+	then
+		LD_PRELOAD="$lib";
+	else
+		LD_PRELOAD="$LD_PRELOAD:$lib";
+	fi
+
+	# Make it work in scratchbox, only for target binaries.
+	case "$SBOX_PRELOAD" in
+	*,*)
+		SBOX_PRELOAD="$SBOX_PRELOAD:$lib";
+		;;
+	*)
+		SBOX_PRELOAD="$SBOX_PRELOAD,$lib";
+		;;
+	esac
+
+	export LD_PRELOAD SBOX_PRELOAD;
+
+	# Go
+	exec "$@";
+	exit "he?";
+done
+
+echo "lib$me not found" >&2;
+exit 1;
+
+# End of arf|ero|mtero
