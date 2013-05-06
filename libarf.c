@@ -211,8 +211,8 @@
  * -- CONFIG_FAST_UNWIND: Dig the stack manually, looking for frame pointers
  *			and link registers.  Faster, but may be less robust,
  *			and less reliable than backtrace() and libunwind.
- * -- CONFIG_PRINTVARS:	When printing a backtrace find and find the visible
- *			visible variables and print their current value.
+ * -- CONFIG_PRINTVARS:	When printing a backtrace find the visible variables
+ *			and print their current value.
  */
 //#define CONFIG_GLIB
 //#define CONFIG_STDOUT
@@ -221,10 +221,16 @@
 //#define CONFIG_PRINTVARS
 
 #if !defined(__arm__) && !defined(__i386__)
+# ifdef CONFIG_FAST_UNWIND
+#  warning "can't use fast unwinding on unknown architecture"
+# endif
 # undef CONFIG_FAST_UNWIND
 #endif
 
 #ifndef CONFIG_FAST_UNWIND
+# ifdef CONFIG_PRINTVARS
+#  warning "can't print variables without fast unwinding"
+# endif
 # undef CONFIG_PRINTVARS
 #endif
 /* Configuration }}} */
@@ -466,6 +472,7 @@ static void *enlarge(struct bufhead_st *bh, size_t need)
 	return bh->buf + bh->size1*bh->n;
 } /* enlarge */
 
+#ifdef CONFIG_PRINTVARS
 /* Restores the termination of $bh to $checkpoint. */
 static void rollback(struct bufhead_st *bh, size_t checkpoint)
 {
@@ -500,6 +507,7 @@ static int insstr(struct bufhead_st *bh, char const *str)
 	memcpy(&bh->buf[0], str, lstr);
 	return 1;
 } /* insstr */
+#endif /* CONFIG_PRINTVARS */
 
 /* Adds a formatted string to at $bh->buf[bh->n], enlarging the buffer
  * as necessary.  If the string cannot be stored nothing is changed
@@ -706,6 +714,7 @@ static struct dso_st const *getdso(void const *addr)
 } /* getdso */
 /* }}} */
 
+#ifdef CONFIG_FAST_UNWIND
 /* addr_is() {{{ */
 /* "Segment" means "mapped region" here.
  * Each segment_st corresponds to a line in /proc/self/maps.
@@ -861,6 +870,7 @@ static enum segment_type_t addr_is(struct dso_st const *dso,
 	return found;
 } /* addr_is */
 /* addr_is }}} */
+#endif /* CONFIG_FAST_UNWIND */
 
 /* printvars() {{{ */
 #ifdef CONFIG_PRINTVARS
@@ -1684,7 +1694,7 @@ static void bt0(unsigned i, void const *pc, void const *fp)
 		if (wantsvars && fp != NULL)
 			for (i = 0; i < cs.nscopes; i++)
 				printvars(&cs.scopes[i], cs.dso, pc, fp);
-#endif
+#endif /* CONFIG_PRINTVARS */
 		free(cs.scopes);
 	}
 } /* bt0 */
@@ -1945,7 +1955,7 @@ static void __attribute__((constructor)) init(void)
 	extern void (*the_real_barf)(char const *, ...);
 
 	the_real_barf = barf;
-#endif
+#endif /* CONFIG_LIBARF_EXTERNAL == 1 */
 } /* init */
 #endif /* CONFIG_LIBARF_EXTERNAL > 0 */
 /* Constructors }}} */
