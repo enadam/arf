@@ -6,13 +6,19 @@
 DEST	?= .
 #CFLAGS	:= -O2
 CFLAGS	:= -O0 -ggdb3
-CFLAGS	+= -DCONFIG_FAST_UNWIND
-CFLAGS	+= -DCONFIG_PRINTVARS
+#CFLAGS	+= -DCONFIG_FAST_UNWIND
+#CFLAGS	+= -DCONFIG_PRINTVARS
 #GLIB	:= -DCONFIG_GLIB $(shell pkg-config --cflags --libs glib-2.0)
 
 # Variables
+# Link statically with libdw and libelf if possible.
 CFLAGS	+= -Ideps -Ldeps/$(ARCH)
-ARFLIBS	:= -l:libdw_pic.a -l:libelf_pic.a -ldl
+ifeq ($(wildcard /usr/lib/libdw_pic.a /usr/local/lib/libdw_pic.a),)
+ARFLIBS	:= -ldw -lelf -ldl
+else
+ARFLIBS := -l:libdw_pic.a -l:libelf_pic.a
+endif
+ARFLIBS	+= -ldl
 THREADS	:= -D_THREAD_SAFE -lpthread
 
 # Fucking gcc in scratchbox/x86 generates code for the i386,
@@ -98,7 +104,9 @@ xclean: clean
 	[ $(DEST)/mtero -ef mtero ] || rm -f $(DEST)/mtero;
 	[ $(DEST)/ero   -ef ero   ] || rm -f $(DEST)/ero;
 	[ $(DEST)/arf   -ef arf   ] || rm -f $(DEST)/arf;
+ifneq ($(DEST),.)
 	-rmdir $(DEST);
+endif
 
 .PHONY: all barf libero ctlink rtlink arftest erotest erotest_mt clean xclean
 
