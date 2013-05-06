@@ -79,7 +79,7 @@
 #	./mtero [options] <program> [<args>]
 #		Same as ./ero but preload a multithreaded <program>
 #		with libero_mt.so.  libhildon-based programs need
-#		thread awareness because of pulseaudio playback.
+#		thread-awareness because of pulseaudio playback.
 #
 
 # Whom to preload?
