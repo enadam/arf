@@ -780,10 +780,10 @@ static void report(void)
       for (;;)
       {
 #ifdef _THREAD_SAFE
-         fprintf(stderr, "ptr=%p (tid=%u), size=%u, karma=%u\n",
+         fprintf(stderr, "ptr=%p (tid=%u), size=%zu, karma=%u\n",
             mem->ptr, mem->tid, mem->size, mem->karma++);
 #else
-         fprintf(stderr, "ptr=%p, size=%u, karma=%u\n",
+         fprintf(stderr, "ptr=%p, size=%zu, karma=%u\n",
             mem->ptr, mem->size, mem->karma++);
 #endif
 

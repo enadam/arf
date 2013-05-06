@@ -100,17 +100,21 @@ static void roulette(unsigned id, void *pool[], unsigned npool)
 } /* roulette */
 
 /* roulette() until $Quit then clean up. */
-static void *zetork(void *id)
+static void *zetork(void *idp)
 {
 	void *pool[10000];
-	unsigned npool, i;
+	unsigned id, npool, i;
+
+	id = idp ? *(unsigned *)idp : 0;
+	free(idp);
 
 	npool = sizeof(pool) / sizeof(pool[0]);
 	memset(pool, 0, sizeof(pool));
-	while (!Quit)
-		roulette((unsigned)id, pool, npool);
 
-	printf("%u. quit\n", (unsigned)id);
+	while (!Quit)
+		roulette(id, pool, npool);
+
+	printf("%u. quit\n", id);
 	for (i = 0; i < npool; i++)
 		free(pool[i]);
 	return NULL;
@@ -134,11 +138,17 @@ int main(int argc, char const *argv[])
 	n = argv[1] ? atoi(argv[1]) : 10;
 	pthread_t tids[n];
 	for (i = 0; i < n; i++)
-		pthread_create(&tids[i], NULL, zetork, (void *)i);
+	{
+		unsigned *idp;
+
+		idp = malloc(sizeof(*idp));
+		*idp = id;
+		pthread_create(&tids[i], NULL, zetork, idp);
+	}
 	for (i = 0; i < n; i++)
 		pthread_join(tids[i], NULL);
 #else
-	zetork(0);
+	zetork(NULL);
 #endif
 
 	raise(SIGPROF);

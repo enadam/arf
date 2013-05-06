@@ -303,6 +303,15 @@ do									\
 } while (0)
 #endif
 
+/* 32/64-bit platform selection */
+#if __LP64__
+# define elf_getehdr		elf64_getehdr
+# define elf_getshdr		elf64_getshdr
+#else
+# define elf_getehdr		elf32_getehdr
+# define elf_getshdr		elf32_getshdr
+#endif
+
 /* Debugging */
 #if 0
 # include <signal.h>
@@ -329,6 +338,15 @@ do									\
 /* Macros }}} */
 
 /* Type definitions {{{ */
+/* Use the appropriate ELF types for this platform. */
+#if __LP64__
+typedef Elf64_Ehdr Elf_Ehdr;
+typedef Elf64_Shdr Elf_Shdr;
+#else /* we're 32-bit */
+typedef Elf32_Ehdr Elf_Ehdr;
+typedef Elf32_Shdr Elf_Shdr;
+#endif
+
 /* State of enlarge(). */
 struct bufhead_st
 {
@@ -558,10 +576,10 @@ static Dwarf *opendbg(struct stat const *that,
 	/* Construct and open $path. */
 	if (prefix)
 		snprintf(path, sizeof(path), "%s/%.*s/%s/%s",
-			prefix, ldir, dir, postfix, fname);
+			prefix, (int)ldir, dir, postfix, fname);
 	else
 		snprintf(path, sizeof(path), "%.*s/%s/%s",
-			ldir, dir, postfix, fname);
+			(int)ldir, dir, postfix, fname);
 	if ((fd = open(path, O_RDONLY)) < 0)
 		return NULL;
 
@@ -588,9 +606,9 @@ static Dwarf *finddbg(int fd, char const *dir, size_t ldir)
 {
 	struct stat sbuf;
 	Elf *elf;
-	Elf32_Ehdr *ehdr;
+	Elf_Ehdr *ehdr;
 	Elf_Scn *scn;
-	Elf32_Shdr *shdr;
+	Elf_Shdr *shdr;
 	Dwarf *dr;
 
 	/* Get the inode of $fd so we won't try to find
@@ -601,12 +619,15 @@ static Dwarf *finddbg(int fd, char const *dir, size_t ldir)
 	/* Iterate over the sections until we find .gnu_debuglink. */
 	dr = NULL;
 	elf = elf_begin(fd, ELF_C_READ_MMAP, NULL);
-	ehdr = elf32_getehdr(elf);
+	ehdr = elf_getehdr(elf);
 	for (scn = elf_getscn(elf, 0); scn; scn = elf_nextscn(elf, scn))
 	{
 		char const *fname;
 
-		shdr = elf32_getshdr(scn);
+		shdr = elf_getshdr(scn);
+		if (!shdr)
+			/* Can be 32/64-bit incompatibility. */
+			continue;
 		if (shdr->sh_type != SHT_PROGBITS)
 			continue;
 		if (strcmp(elf_strptr(elf, ehdr->e_shstrndx, shdr->sh_name),
@@ -766,17 +787,17 @@ static enum segment_type_t addr_is(struct dso_st const *dso,
 	if (dso)
 	{	/* Search the ELF section headers. */
 		Elf_Scn *scn;
-		Elf32_Shdr *shdr;
-		Elf32_Ehdr *ehdr;
+		Elf_Shdr *shdr;
+		Elf_Ehdr *ehdr;
 
 		/* As though they appear so the ELF specs don't mandate
 		 * that the SHT is ordered by address, so it's safer not
 		 * to take a shortcut. */
-		ehdr = elf32_getehdr(dso->elf);
+		ehdr = elf_getehdr(dso->elf);
 		for (scn = elf_getscn(dso->elf, 0); scn;
 			scn = elf_nextscn(dso->elf, scn))
 		{
-			shdr = elf32_getshdr(scn);
+			shdr = elf_getshdr(scn);
 
 			/* Is $addr in $scn?
 			 * (What about overlapping sections?) */
